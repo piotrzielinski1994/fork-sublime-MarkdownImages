@@ -195,10 +195,10 @@ class ImageHandler:
                         <img src="data:image/{}" class="centerImage" {}>
                     </a>
                 '''
-                b64_data = base64.encodestring(data).decode('ascii')
-                b64_data = b64_data.replace('\n', '')
+                b64_data = base64.encodebytes(data).decode('ascii').replace('\n', '')
 
                 img = "{};base64,{}".format(ttype, b64_data)
+                href = url.geturl()
                 urldata = data
             else:
                 if not show_local:
@@ -230,7 +230,7 @@ class ImageHandler:
 
                 FMT = '''
                     <a href="{}">
-                        <img src="{}" class="centerImage" {}>
+                        <img src="data:image/{}" class="centerImage" {}>
                     </a>
                 '''
                 try:
@@ -238,19 +238,21 @@ class ImageHandler:
                 except Exception as e:
                     debug("Failed to load {}:".format(path), e)
                     continue
-                img = urllib.parse.urlunparse(url)
+                try:
+                    with open(path, 'rb') as _imgf:
+                        _raw = _imgf.read()
+                except Exception as e:
+                    debug("Failed to read {}:".format(path), e)
+                    continue
+                _b64 = base64.encodebytes(_raw).decode('ascii').replace('\n', '')
+                fwd_path = path.replace('\\', '/')
+                href = 'file:///' + urllib.parse.quote(fwd_path, safe=':/').lstrip('/')
+                img = "{};base64,{}".format(ttype, _b64)
 
                 # Removes arguments in the URL
                 if arg_trim:
-                    img = img.split('?')[0]
+                    href = href.split('?')[0]
                     debug("split")
-
-                # On Windows, urlunparse adds a third slash after 'file://' for some reason
-                # This breaks the image url, so it must be removed
-                # splitdrive() detects windows because it only returns something if the
-                # path contains a drive letter
-                if os.path.splitdrive(path)[0]:
-                    img = img.replace('file:///', 'file://', 1)
 
             if not ttype:
                 debug("unknown ttype")
@@ -284,7 +286,7 @@ class ImageHandler:
 
             if imgattr:
                 imgattr += ' '
-            imgattr += 'width="{}" height="{}"'.format(w, h)
+            imgattr += 'width="{}" height="{}"'.format(int(w), int(h))
 
             # Force the phantom image view to append past the end of the line
             # Otherwise, the phantom image view interlaces in between
@@ -295,7 +297,7 @@ class ImageHandler:
             debug("line_region", line_region)
 
             key = 'mdimage-' + str(line_region.b)
-            html_img = FMT.format(url.geturl(), img, imgattr)
+            html_img = FMT.format(href, img, imgattr)
 
             phantom = (key, html_img)
             phantoms[phantom[0]] = phantom
